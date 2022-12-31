@@ -4,7 +4,7 @@
 
 <p align='center'>
     <a href='github.address'>
-        <img src='https://iili.io/HIjPRS9.jpg' alt='Pyrubi' width='256'>
+        <alt='Pyrubi' width='256'>
     </a>
     <a href='https://github.com/AliGanji1/pyrubi'>
         GitHub
