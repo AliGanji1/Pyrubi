@@ -1,0 +1,6 @@
+pycryptodome
+websocket-client
+websockets
+requests
+aiohttp
+pillow
