@@ -1,5 +1,8 @@
-from .rubika import bot as Bot, bot_async as Bot_async , tools as Tools
+from .methods import methods as Bot
+from .message import message as Message
+from .tools import tools as Tools
 
-# 'Author': 'Ali Ganji zadeh'
-# 'GitHub': 'https://github.com/AliGanji1/pyrubi'
-# 'Rubika': '@pyrubika'
+__version__ = '1.8.0'
+__author__ = 'Ali Ganji zadeh'
+__github__ = 'https://github.com/AliGanji1/pyrubi'
+__rubika__ = '@pyrubika'

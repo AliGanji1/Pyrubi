@@ -1,6 +1,8 @@
 pycryptodome
 websocket-client
-websockets
 requests
 aiohttp
+urllib3
 pillow
+mutagen
+tinytag
