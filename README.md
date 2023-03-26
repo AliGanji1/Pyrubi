@@ -1,6 +1,6 @@
 <h1>Pyrubi 1.8.0<h1/>
 
-> Pyrubi is a powerful and easy library for building self robots in Rubika
+> Pyrubi is a powerful and easy library for building self bots in Rubika
 
 <p align='center'>
     <img src='https://iili.io/HIjPRS9.jpg' alt='Pyrubi Library 1.8.0' width='356'>
