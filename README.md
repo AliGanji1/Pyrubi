@@ -23,10 +23,11 @@ for msg in bot.on_message():
 <hr>
 
 ### Features:
-
+<l>
 **Fast : The minimum request time is 0.07 seconds and the maximum request time is 0.3 seconds**,
 **Easy : All methods and features are designed as easy and optimal as possible**, 
 **Powerful : While the library is simple, it has high speed and features that make your work easier and faster**
+</l>
 
 <hr>
 
