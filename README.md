@@ -6,10 +6,15 @@
     <img src='https://iili.io/HIjPRS9.jpg' alt='Pyrubi Library 1.8.0' width='356'>
 </p>
 
-<hr>
+<h2>Install and Update</h2>
 
-**Example:**
-``` python
+```bash
+pip install -U pyrubi
+```
+
+<h2>Example:</h2>
+
+```python
 from pyrubi import Bot, Message
 
 bot = Bot('TOKEN')
@@ -22,6 +27,19 @@ for msg in bot.on_message():
 
 <hr>
 
+### Send File
+
+```python
+from pyrubi import Bot, Message
+
+bot = Bot('TOKEN')
+
+for msg in bot.on_message():
+    m = Message(msg)
+    if m.text() == 'sendFile':
+        bot.send_file(m.chat_id(), "Namefile.mp3")
+```
+
 ### Features:
     
 - *Fast* : **The minimum request time is 0.07 seconds and the maximum request time is 0.3 seconds**
@@ -30,10 +48,5 @@ for msg in bot.on_message():
 
 <hr>
 
-# Rubika : @pyrubika
-
-### Install or Update:
-
-``` bash
-pip install -U pyrubi
-```
+# Social Media
+## Rubika : @pyrubika
