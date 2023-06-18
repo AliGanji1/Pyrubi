@@ -49,7 +49,7 @@ for update in bot.on_message():
 <hr>
 
 ## Social Media:
-### <a href='https://github.com/AliGanji1/pyrubi'>Rubika</a>
+### <a href='https://rubika.ir/pyrubika'>Rubika</a>
 
 <hr>
 
