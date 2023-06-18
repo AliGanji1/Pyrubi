@@ -3,7 +3,8 @@ from ..tools import tools
 from ..message import message
 from ..maker import maker
 from ..handler import handler
-from requests import get, post
+from requests import session
+from urllib3 import PoolManager
 from random import choice, randint
 from time import time
 from pathlib import Path
@@ -12,86 +13,76 @@ class methods:
 
     def __init__(self, auth):
         self.auth = auth
-        self.hs = handler(auth).hand_shake
-        self.method = maker(auth).method
+        self.hs = handler(auth, self).hand_shake
+        self.method = maker(auth, self).method
         self.crypto = cryption(auth)
+        self.http = PoolManager()
         self.got_messages_update = []
-        self.filters = {
-            'chat_filter': [],
-            'message_filter': []
-        }
         del auth
 
-    def add_filter(self, chat_filter = [], message_filter = []):
-        self.filters['chat_filter'] = chat_filter
-        self.filters['message_filter'] = message_filter
 
-    def on_message(self):
+    def on_message(self, chat_filter=[], message_filter=[]):
         for recv in self.hs():
-            if not message(recv).chat_type() in self.filters['chat_filter'] and not message(recv).message_type() in self.filters['message_filter']:
+            if 'chat_updates' in recv and not message(recv).chat_type() in chat_filter and not message(recv).message_type() in message_filter:
                 yield recv
             else:
                 continue
 
-    def get_chat_update(self, chat_id):
-        return self.method(
-            'getMessagesUpdates',
-            {
-                'object_guid': chat_id,
-                'state': str(round(time()) - 200)
-            }
-        )['updated_messages']
-
-    def get_chats_update(self):
+    def get_chats_update(self, chat_filter=[], message_filter=[], save_message_ids=True):
         while True:
-            chats_update = self.method('getChatsUpdates', {'state': str(round(time()) - 200)})['chats'][0]
-            if not message(chats_update).message_id() in self.got_messages_update:
-                if not message(chats_update).chat_type() in self.filters['chat_filter'] and not message(chats_update).message_type() in self.filters['message_filter']:
-                    self.got_messages_update.append(message(chats_update).message_id())
-                    return chats_update
-                else:
-                    continue
-            else:
+            try:
+                chats_update = self.method('getChatsUpdates', {'state': round(time()) - 200})['chats'][0]
+                if not message(chats_update).chat_type() in chat_filter and not message(chats_update).message_type() in message_filter:
+                    if save_message_ids:
+                        if not message(chats_update).message_id() in self.got_messages_update:
+                            self.got_messages_update.append(message(chats_update).message_id())
+                            yield chats_update
+                    else:
+                        yield chats_update
+            except IndexError:
                 continue
 
-    def send_text(self, chat_id, custom_text, message_id = None):
-        metadata = tools.check_metadata(custom_text)
+    def get_chats_update2(self):
+        return self.method('getChatsUpdates', {'state': round(time()) - 200})['chats']
+
+    def send_text(self, chat_id, text, message_id = None):
+        metadata = tools.check_metadata(text)
         data = {
             'object_guid': chat_id,
             'rnd': str(randint(10000000, 999999999)),
-            'text': metadata[1].strip(),
+            'text': metadata[1].strip() if metadata[1] != None else '????',
             'reply_to_message_id': message_id,
         }
         if metadata[0] != []:
             data['metadata'] = {'meta_data_parts': metadata[0]}
         return self.method('sendMessage', data)
 
-    def reply(self, data, custom_text):
+    def reply(self, data, text):
         msg = message(data)
         return self.send_text(
             msg.chat_id(),
-            custom_text,
-            msg.message_id()
+            text,
+            msg.message_id(),
         )
 
     def send_image(self, chat_id, file, caption = None, message_id = None, thumbnail = None):
         req = self.upload_file(file)
         file_data = req[0]
         url_data = req[1]
-        size = tools.get_image_size(open(file,'rb').read() if not url_data else url_data.content)
+        size = tools.get_image_size(file if str(type(file)) == "<class 'bytes'>" else open(file,'rb').read() if not url_data else url_data.data)
         metadata = tools.check_metadata(caption)
         data = {
             'file_inline': {
                 'dc_id': file_data['dc_id'],
                 'file_id': file_data['id'],
                 'type':'Image',
-                'file_name': f'Unknown {randint(1, 100)}.png' if url_data else file,
-                'size': str(len(url_data.content)) if url_data else str(Path(file).stat().st_size),
+                'file_name': f'Pyrubi {randint(1, 100)}.png' if url_data or str(type(file)) == "<class 'bytes'>" else file,
+                'size': str(len(file)) if str(type(file)) == "<class 'bytes'>" else str(len(url_data.data)) if url_data else str(Path(file).stat().st_size),
                 'mime': 'png',
                 'access_hash_rec': req[2],
                 'width': size[0],
                 'height': size[1],
-                'thumb_inline': tools.get_thumbnail(url_data.content if url_data else thumbnail or open(file,'rb').read()).decode('utf-8')
+                'thumb_inline': tools.get_thumbnail(file if str(type(file)) == "<class 'bytes'>" else url_data.data if url_data else open(file or thumbnail, 'rb').read()).decode('utf-8')
             },
             'object_guid': chat_id,
             'rnd': str(randint(100000,999999999)),
@@ -113,12 +104,12 @@ class methods:
                 'mime': 'mp4',
                 'dc_id': file_data['dc_id'],
                 'access_hash_rec': req[2],
-                'file_name': f'Unknown {randint(1, 100)}.mp4' if url_data else file,
+                'file_name': f'Pyrubi {randint(1, 100)}.mp4' if url_data or str(type(file)) == "<class 'bytes'>" else file,
                 'thumb_inline': '/9j/4AAQSkZJRgABAQAAAQABAAD/4gIoSUNDX1BST0ZJTEUAAQEAAAIYAAAAAAIQAABtbnRyUkdC\nIFhZWiAAAAAAAAAAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAA\nAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlk\nZXNjAAAA8AAAAHRyWFlaAAABZAAAABRnWFlaAAABeAAAABRiWFlaAAABjAAAABRyVFJDAAABoAAA\nAChnVFJDAAABoAAAAChiVFJDAAABoAAAACh3dHB0AAAByAAAABRjcHJ0AAAB3AAAADxtbHVjAAAA\nAAAAAAEAAAAMZW5VUwAAAFgAAAAcAHMAUgBHAEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFhZWiAA\nAAAAAABvogAAOPUAAAOQWFlaIAAAAAAAAGKZAAC3hQAAGNpYWVogAAAAAAAAJKAAAA+EAAC2z3Bh\ncmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABYWVogAAAAAAAA9tYAAQAAAADT\nLW1sdWMAAAAAAAAAAQAAAAxlblVTAAAAIAAAABwARwBvAG8AZwBsAGUAIABJAG4AYwAuACAAMgAw\nADEANv/bAEMADQkKCwoIDQsKCw4ODQ8TIBUTEhITJxweFyAuKTEwLiktLDM6Sj4zNkY3LC1AV0FG\nTE5SU1IyPlphWlBgSlFST//bAEMBDg4OExETJhUVJk81LTVPT09PT09PT09PT09PT09PT09PT09P\nT09PT09PT09PT09PT09PT09PT09PT09PT09PT//AABEIAGQAOAMBIgACEQEDEQH/xAAWAAEBAQAA\nAAAAAAAAAAAAAAAAAQf/xAAXEAEBAQEAAAAAAAAAAAAAAAAAAREx/8QAFQEBAQAAAAAAAAAAAAAA\nAAAAAAH/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwDMFRRAwACiAACiwAAEQqKi\nqtEAU0QRQADqKBgCCKixVDgYIAIFCiqgAKAiBQqiACixFgACIFCqIAKLAAARCFBRABX/2Q==\n',
                 'width': 240,
                 'height': 240,
-                'time': tools.get_video_duration(file),
-                'size': str(len(url_data.content)) if url_data else str(Path(file).stat().st_size),
+                'time': 1 if url_data or str(type(file)) == "<class 'bytes'>" else tools.get_video_duration(file),
+                'size': str(len(file)) if str(type(file)) == "<class 'bytes'>" else str(len(url_data.data)) if url_data else str(Path(file).stat().st_size),
                 'type': 'Video'
             },
             'object_guid': chat_id,
@@ -141,11 +132,11 @@ class methods:
                 'mime': 'mp4',
                 'dc_id': file_data['dc_id'],
                 'access_hash_rec': req[2],
-                'file_name': f'Unknown {randint(1, 100)}.mp4' if url_data else file,
+                'file_name': f'Pyrubi {randint(1, 100)}.mp4' if url_data or str(type(file)) == "<class 'bytes'>" else file,
                 'width': 240,
                 'height': 240,
-                'time': tools.get_video_duration(file),
-                'size': str(len(url_data.content)) if url_data else str(Path(file).stat().st_size),
+                'time': 1 if url_data or str(type(file)) == "<class 'bytes'>" else tools.get_video_duration(file),
+                'size': str(len(file)) if str(type(file)) == "<class 'bytes'>" else str(len(url_data.data)) if url_data else str(Path(file).stat().st_size),
                 'type': 'Gif',
                 'is_round': False,
             },
@@ -168,9 +159,9 @@ class methods:
                 'dc_id': file_data['dc_id'],
                 'file_id': file_data['id'],
                 'type': 'Voice',
-                'file_name': f'Unknown {randint(1, 100)}.ogg' if url_data else file,
-                'size': str(len(url_data.content)) if url_data else str(Path(file).stat().st_size),
-                'time': 1 if url_data else int(tools.get_voice_duration(open(file,'rb').read()) if time == None else time) * 1000,
+                'file_name': f'Pyrubi {randint(1, 100)}.ogg' if url_data or str(type(file)) == "<class 'bytes'>" else file,
+                'size': str(len(url_data.data)) if url_data else str(len(file)) if str(type(file)) == "<class 'bytes'>" else str(Path(file).stat().st_size),
+                'time': 1 if url_data or str(type(file)) == "<class 'bytes'>" else int(tools.get_voice_duration(open(file,'rb').read()) if time == None else time) * 1000,
                 'mime': 'ogg',
                 'access_hash_rec': req[2],
             },
@@ -194,13 +185,13 @@ class methods:
                 'mime': 'mp3',
                 'dc_id': file_data['dc_id'],
                 'access_hash_rec': req[2],
-                'file_name': f'Unknown {randint(1, 100)}.mp3' if url_data else file,
+                'file_name': f'Pyrubi {randint(1, 100)}.mp3' if url_data or str(type(file)) == "<class 'bytes'>" else file,
                 'width': 0,
                 'height': 0,
-                'time': tools.get_voice_duration(url_data.content) if url_data else tools.get_voice_duration(open(file,'rb').read()),
-                'size': str(len(url_data.content)) if url_data else str(Path(file).stat().st_size),
+                'time': 1 if url_data or str(type(file)) == "<class 'bytes'>" else int(tools.get_voice_duration(open(file,'rb').read()) if time == None else time),
+                'size': str(len(file)) if str(type(file)) == "<class 'bytes'>" else str(len(url_data.data)) if url_data else str(Path(file).stat().st_size),
                 'type': 'Music',
-                'music_performer': tools.get_music_artist(url_data.content) if url_data else tools.get_music_artist(file),
+                'music_performer': tools.get_music_artist(url_data.data if url_data else file),
                 'is_round': False
             },
             'is_mute': False,
@@ -224,7 +215,7 @@ class methods:
                 'file_id': file_data['id'],
                 'type': 'File',
                 'file_name': file_name or f'Unknown {randint(1, 100)}.{mime or tools.get_mime_from_url(file)}' if url_data else file_name or file,
-                'size': str(len(url_data.content)) if url_data else str(Path(file).stat().st_size),
+                'size': str(len(url_data.data)) if url_data else str(Path(file).stat().st_size),
                 'mime': mime or tools.get_mime_from_url(file) if url_data else file.split('.')[-1] or file,
                 'access_hash_rec': req[2]
             },
@@ -393,7 +384,17 @@ class methods:
             'getMessagesInterval',
             {
                 'object_guid':chat_id,
-                'middle_message_id':middle_message_id
+                'middle_message_id': middle_message_id
+            }
+        )['messages']
+    
+    def get_chat_last_messages(self, chat_id, min_id):
+        return self.method(
+            'getMessages',
+            {
+                "object_guid": chat_id,
+                "sort":"FromMin",
+                "min_id": min_id
             }
         )['messages']
 
@@ -764,7 +765,7 @@ class methods:
             }
         )
 
-    def get_chat_folders(self):
+    def get_folders(self):
         return self.method('getFolders', {})
 
     def get_suggested_folders(self):
@@ -834,25 +835,69 @@ class methods:
                 'code': verification_code
             }            
         )
+    
+    def get_sticker_sets(self):
+        return self.method('getMyStickerSets', {})
 
     def get_me(self):
-        return post(
+        session().close()
+        return session().post(
+            'https://messengerg2c1.iranlms.ir',
             json={
-                'data': {},
-                'method': 'getUser',
-                'api_version': '2',
-                'auth': self.auth,
-                'client': {
-                    'app_name': 'Mian',
-                    'package': 'm.rubika.ir',
-                    'app_version': '1.2.1',
-                    'platform': 'PWA'
+                "data":{},
+                "method":"getUser",
+                "api_version":"2",
+                "auth": self.auth,
+                "Messenger":{
+                    "app_name":"Main",
+                    "package":"m.rubika.ir",
+                    "app_version":"1.2.1",
+                    "platform":"PWA"
                 }
             },
-            url='https://messengerg2c1.iranlms.ir'
-        ).json()['data']['user']
+            headers = {
+                'referer': 'https://web.rubika.ir/',
+            }
+        ).json()
+    
+    def get_base_info(self):
+        return session().post(
+            'https://servicesbase.iranlms.ir/',
+            json={
+                'method':'getBaseInfo',
+                'api_version':'0',
+                'data':{},
+                'auth': self.auth,
+                'client':{
+                    'app_name':'Main',
+                    'app_version':'4.2.0',
+                    'platform':'PWA',
+                    'package':'web.rubika.ir'
+                }
+            }
+        ).json()
+    
+    def get_tag_list(self):
+        return session().post(
+            'https://services3.iranlms.ir/',
+            json={
+                'method':'getTagList',
+                'api_version':'0',
+                'data':{'taglist_id': 'new_vod'},
+                'auth': self.auth,
+                'client':{
+                    'app_name':'Main',
+                    'app_version':'4.2.0',
+                    'platform':'PWA',
+                    'package':'web.rubika.ir'
+                }
+            }
+        ).json()
 
     def edit_profile(self, **kwargs):
+        """
+        parameters : first_name, last_name, bio, username
+        """
         if 'username' in list(kwargs.keys()):
             return self.method(
                 'updateUsername',
@@ -893,12 +938,13 @@ class methods:
             }
         )
 
-    def send_code(self, phone_number, send_internal = False):
+    def send_code(self, phone_number, pass_key=None, send_internal=False):
         return self.method(
             'sendCode',
             {
                 'phone_number': f'98{tools.parse_phone_number(phone_number)}',
-                'send_type': 'Internal' if send_internal else 'SMS'
+                'send_type': 'Internal' if send_internal else 'SMS',
+                'pass_key': pass_key
             }
         )
 
@@ -914,21 +960,23 @@ class methods:
 
     def logout(self):
         return self.method('logout', {})
+    
+    def get_chat_ads(self):
+        return self.method('getChatAds', {'state': str(round(time()) - 100)})
 
     def request_file(self, file):
         for link in ['http:/', 'https:/']:
-            if link in file:
-                url_data = get(file)
-                file_name = f'pyrubi library {randint(1, 100)}'
+            if link in str(file):
+                url_data = self.http.request('GET', file)
                 break
             else:
                 url_data = None
         return self.method(
             'requestSendFile',
             {
-                'file_name': file_name if url_data else file,
-                'mime': tools.get_mime_from_url(file) if url_data else file.split('.')[-1],
-                'size': len(url_data.content) if url_data else Path(file).stat().st_size
+                'file_name': f'pyrubi library {randint(1, 100)}',
+                'mime': tools.get_mime_from_url(file) if url_data else 'pyrubi' if str(type(file)) == "<class 'bytes'>" else file.split('.')[-1],
+                'size': len(url_data.data) if url_data else str(len(file)) if str(type(file)) == "<class 'bytes'>" else Path(file).stat().st_size
             }
         ), url_data
 
@@ -936,19 +984,18 @@ class methods:
         req = self.request_file(file)
         file_data = req[0]
         url_data = req[1]
-        upload = maker(self.auth)._upload
-        bytef = url_data.content if url_data else open(file,'rb').read()
-        size = str(len(url_data.content)) if url_data else str(Path(file).stat().st_size)
+        upload = maker(self.auth, self)._upload
+        bytef = url_data.data if url_data else file if str(type(file)) == "<class 'bytes'>" else open(file,'rb').read()
+        size = str(len(url_data.data)) if url_data else str(len(file)) if str(type(file)) == "<class 'bytes'>" else str(Path(file).stat().st_size)
         url = file_data['upload_url']
         header = {
             'auth': self.auth,
             'Host': file_data['upload_url'].replace('https://','').replace('/UploadFile.ashx',''),
             'chunk-size': size,
-            'content-length': size,
+            'data-length': size,
             'file-id': str(file_data['id']),
             'access-hash-send': file_data['access_hash_send'],
-            'User-agent': 'okhttp/3.12.1',
-            'content-type': 'application/octet-stream',
+            'data-type': 'application/octet-stream',
         }
         while True:
             if len(bytef) <= 131072:
@@ -969,3 +1016,30 @@ class methods:
                         p = upload(url=url, data=bytef[k:], headers=header)
                         print('\r' + f'{round(len(bytef) / 1024) / 1000} MB /', sep='', end=f' {round(len(bytef) / 1024) / 1000} MB')
                 return file_data, url_data, p['data']['access_hash_rec']
+            
+    def download_file(self, chat_id=None, message_id=None, save=False, file_inline=None):
+        message_data = file_inline if file_inline else self.get_messages_info(chat_id, [message_id])[0].get('file_inline', None)
+        if not message_data:
+            raise FileExistsError(f'This ({message_id}) message is not a File !')
+        file_name = message_data.get('file_name', f'pyrubi {time()}.{message_data.get("mime", "pyrubi")}')
+        header = {
+            'auth': self.auth,
+            'file-id': str(message_data['file_id']),
+            'access-hash-rec': message_data['access_hash_rec'],
+            'client-app-version': '3.1.1',
+            'client-platform': 'Android',
+            'client-app-name': 'Main',
+            'client-package': 'app.rbmain.a'
+        }
+        download = maker(self.auth)._download
+        response = download(f'https://messenger{message_data["dc_id"]}.iranlms.ir/GetFile.ashx', header)
+        chunk = b''
+        for i in response.stream(524284):
+            chunk += i
+            print('\r' + f'{round(len(chunk) / 1024) / 1000} MB /', sep='', end=f' {message_data["size"] / 1000000} MB' if 'size' in message_data else None)
+        if save:
+            with open(file_name, 'wb+') as file:
+                file.write(chunk)
+                file.close()
+                return {'file_name': file_name, 'size': message_data.get('size', None), 'file_inline': message_data}
+        return chunk

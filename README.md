@@ -1,39 +1,58 @@
-<h1>Pyrubi 1.8.0<h1/>
+<h1>Pyrubi 2.1.1</h1>
 
-> Pyrubi is a powerful and easy library for building self bots in Rubika
+> Pyrubi is a powerful and easy library for building self Bots in Rubika
 
 <p align='center'>
-    <img src='https://iili.io/HIjPRS9.jpg' alt='Pyrubi Library 1.8.0' width='356'>
+    <img src='https://iili.io/HIjPRS9.jpg' alt='Pyrubi Library 2.1.1' width='356' class="image">
+</p>
+
+<p align='center'>
+    <a href='https://github.com/AliGanji1/pyrubi'>GitHub</a>
+    •
+    <a href='https://rubika.ir/pyrubika'>Documents</a>
 </p>
 
 <hr>
 
-**Example:**
-``` python
-from pyrubi import Bot, Message
-
-bot = Bot('TOKEN')
-
-for msg in bot.on_message():
-    m = Message(msg)
-    if m.text() == 'Hello':
-        bot.send_text(m.chat_id(), 'Hello from Pyrubi Library', m.message_id())
-```
-
-<hr>
-
-### Features:
-    
-- *Fast* : **The minimum request time is 0.07 seconds and the maximum request time is 0.3 seconds**
-- *Easy* : **All methods and features are designed as easy and optimal as possible**
-- *Powerful* : **While the library is simple, it has high speed and features that make your work easier and faster**
-
-<hr>
-
-# Rubika : @pyrubika
-
-### Install or Update:
+## Install or Update:
 
 ``` bash
 pip install -U pyrubi
 ```
+
+<hr>
+
+## Example:
+
+``` python
+from pyrubi import Bot, Message
+
+bot = Bot("TOKEN")
+
+for update in bot.on_message():
+    message = Message(update)
+    if message.text() == 'hello':
+        bot.send_text(message.chat_id(), f"**Hello** ``{message.author_title()}`` ! __This is a__ --test-- ~~message from~~ @@Pyrubi Library@@(https://example.com).", message.message_id())
+```
+
+<hr>
+
+## Features:
+    
+- **Fast** : *The requests are very fast.*
+
+- **Easy** : *All methods and features are designed as easy and optimal as possible*
+
+- **Powerful** : *While the library is simple, it has high speed and features that make your work easier and faster*
+
+
+<hr>
+
+## Social Media:
+### <a href='https://github.com/AliGanji1/pyrubi'>Rubika</a>
+
+<hr>
+
+## 🌟 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=AliGanji1/Pyrubi&type=Date)](https://star-history.com/#AliGanji1/Pyrubi&Date)

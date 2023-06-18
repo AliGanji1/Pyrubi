@@ -5,7 +5,7 @@ from PIL import Image
 from io import BytesIO
 from mutagen.mp3 import MP3
 from tinytag import TinyTag
-from re import findall
+from re import finditer
 
 class tools:
 
@@ -51,55 +51,125 @@ class tools:
             if len(mime) <= 4:
                 return mime
         return 'pyrubi'
-
+    
     def check_metadata(text):
-        g = 0
         if text is None:
-            return ([], text)
-        results = []
-        real_text = text.replace('**', '').replace('__', '').replace('``', '').replace('@@', '')
-        bolds = findall(r'\*\*(.*?)\*\*' , text)
-        italics = findall(r'\_\_(.*?)\_\_' , text)
-        monos = findall(r'\`\`(.*?)\`\`' , text)
-        mentions = findall(r'\@\@(.*?)\@\@' , text)
-        mention_ids = findall(r'\@\@\((.*?)\)' , text)
-        for bold_index , bold_word in zip([real_text.index(i) for i in bolds] , bolds):
-            results.append(
-                {
-                    'from_index' : bold_index,
-                    'length' : len(bold_word),
-                    'type' : 'Bold'
-                }
-            )
-        for italic_index , italic_word in zip([real_text.index(i) for i in italics] , italics):
-            results.append(
-                {
-                    'from_index' : italic_index,
-                    'length' : len(italic_word),
-                    'type' : 'Italic'
-                }
-            )
-        for mono_Index , mono_word in zip([real_text.index(i) for i in monos] , monos):
-            results.append(
-                {
-                    'from_index' : mono_Index,
-                    'length' : len(mono_word),
-                    'type' : 'Mono'
-                }
-            )
-        for mention_index , mention_word in zip([real_text.index(i) for i in mentions] , mentions):
-            results.append(
-                {
-                    'type': 'MentionText',
-                    'from_index': mention_index,
-                    'length': len(mention_word),
-                    'mention_text_object_guid': mention_ids[g] if '@(' in text else '@'
-                }
-            )
-            if '@(' in text:
-                real_text = real_text.replace(f'({mention_ids[g]})', '') 
-            g += 1
-        return (results, real_text)
+            return [], text
+
+        real_text = text.replace('``', '').replace('**', '').replace('__', '').replace('~~', '').replace('--', '').replace('@@', '')
+        metadata = []
+        conflict = 0
+        mention_object_index = 0
+        result = []
+
+        for i in [(i.start(), len(i.group(1)), "mono") for i in finditer(r'\`\`([^``]*)\`\`', text)]:
+            metadata.append(i)
+
+        for i in [(i.start(), len(i.group(1)), "bold") for i in finditer(r'\*\*([^**]*)\*\*', text)]:
+            metadata.append(i)
+
+        for i in [(i.start(), len(i.group(1)), "italic") for i in finditer(r'\_\_([^__]*)\_\_', text)]:
+            metadata.append(i)
+
+        for i in [(i.start(), len(i.group(1)), "strike") for i in finditer(r'\~\~([^~~]*)\~\~', text)]:
+            metadata.append(i)
+
+        for i in [(i.start(), len(i.group(1)), "underline") for i in finditer(r'\-\-([^__]*)\-\-', text)]:
+            metadata.append(i)
+
+        for i in [(i.start(1) - 2, len(i.group(1)), "mention") for i in finditer(r'\@\@([^@@]*)\@\@', text)]:
+            metadata.append(i)
+
+        metadata.sort()
+        for i in metadata:
+            if i[2] == 'mono':
+                result.append(
+                    {
+                        'type': 'Mono',
+                        'from_index': i[0] - conflict,
+                        'length': i[1]
+                    }
+                )
+                conflict += 4
+
+            elif i[2] == 'bold':
+                result.append(
+                    {
+                        'type': 'Bold',
+                        'from_index': i[0] - conflict,
+                        'length': i[1]
+                    }
+                )
+                conflict += 4
+
+            elif i[2] == 'italic':
+                result.append(
+                    {
+                        'type': 'Italic',
+                        'from_index': i[0] - conflict,
+                        'length': i[1]
+                    }
+                )
+                conflict += 4
+
+            elif i[2] == 'strike':
+                result.append(
+                    {
+                        'type': 'Strike',
+                        'from_index': i[0] - conflict,
+                        'length': i[1]
+                    }
+                )
+                conflict += 4
+
+            elif i[2] == 'underline':
+                result.append(
+                    {
+                        'type': 'Underline',
+                        'from_index': i[0] - conflict,
+                        'length': i[1]
+                    }
+                )
+                conflict += 4
+
+            else:
+                mention_objects = [i.group(1) for i in finditer(r'\@\(([^(]*)\)', text)]
+                mention_type = 'Link'
+                if mention_objects[mention_object_index].startswith('u'): mention_type = 'User'
+                elif mention_objects[mention_object_index].startswith('g'): mention_type = 'Group'
+                elif mention_objects[mention_object_index].startswith('c'): mention_type = 'Channel'
+                elif mention_objects[mention_object_index].startswith('b'): mention_type = 'Bot'
+                elif mention_objects[mention_object_index].startswith('s'): mention_type = 'Service'
+                if mention_type == 'Link':
+                    result.append(
+                        {
+                            'from_index': i[0] - conflict,
+                            'length': i[1],
+                            'link': {
+                                'hyperlink_data': {
+                                    "url": mention_objects[mention_object_index]
+                                },
+                                'type': 'hyperlink',
+                            },
+                            'type': mention_type,
+                        }
+                    )
+
+                else:
+                    result.append(
+                        {
+                            'type': 'MentionText',
+                            'from_index': i[0] - conflict,
+                            'length': i[1],
+                            'mention_text_object_guid': mention_objects[mention_object_index],
+                            'mention_text_object_type': mention_type
+                        }
+                    )
+                real_text = real_text.replace(f'({mention_objects[mention_object_index]})', '')
+                conflict += 6 + len(mention_objects[mention_object_index])
+                mention_object_index += 1
+                
+        return result, real_text
 
     def get_chat_type_by_id(chat_id):
         if chat_id.startswith('u'): data = 'User'

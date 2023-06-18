@@ -1,28 +1,34 @@
 Metadata-Version: 2.1
 Name: pyrubi
-Version: 1.8.0
-Summary: This is a powerful library for building self robots in Rubika
+Version: 2.1.1
+Summary: This is a powerful and easy library for building self Bots in Rubika
 Home-page: https://github.com/AliGanji1/pyrubi
 Author: Ali Ganji zadeh
 Author-email: ali.ganji.za@gmail.com
-Keywords: rubika,rubino,pyrubi,pyrubika,rubika bot,rubika library,rubx,rubika-bot,rubika-lib,bot,self bot,rubika.ir,asyncio
+Keywords: rubika,rubika-bot,pyrubi,rubx,rubino,rubika.ir,bot
 Classifier: Programming Language :: Python :: 3.6
 Classifier: Programming Language :: Python :: 3.7
 Classifier: Programming Language :: Python :: 3.8
 Classifier: Programming Language :: Python :: 3.9
 Classifier: Programming Language :: Python :: 3.10
 Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
 Classifier: License :: OSI Approved :: MIT License
-Requires-Python: ~=3.7
+Requires-Python: ~=3.6
 Description-Content-Type: text/markdown
 
-<h1>Pyrubi 1.8.0<h1/>
+<h1>Pyrubi 2.1.1</h1>
 
-> Pyrubi is a powerful and easy library for building self robots in Rubika
+> Pyrubi is a powerful and easy library for building self Bots in Rubika
 
 <p align='center'>
-    <img src='https://iili.io/HIjPRS9.jpg' alt='Pyrubi Library 1.8.0' width='356'>
+    <img src='https://iili.io/HIjPRS9.jpg' alt='Pyrubi Library 2.1.1' width='356' class="image">
+</p>
+
+<p align='center'>
     <a href='https://github.com/AliGanji1/pyrubi'>GitHub</a>
+    •
+    <a href='https://rubika.ir/pyrubika'>Documents</a>
 </p>
 
 <hr>
@@ -31,28 +37,31 @@ Description-Content-Type: text/markdown
 ``` python
 from pyrubi import Bot, Message
 
-bot = Bot('TOKEN')
+bot = Bot("TOKEN")
 
-for msg in bot.on_message():
-    m = Message(msg)
-    if m.text() == 'Hello':
-        bot.send_text(m.chat_id(), 'Hello from Pyrubi Library', m.message_id())
+for update in bot.on_message():
+    message = Message(update)
+    if message.text() == 'hello':
+        bot.send_text(message.chat_id(), f"**Hello** ``{message.author_title()}`` ! __This is a__ --test-- ~~message from~~ @@Pyrubi Library@@(https://example.com).", message.message_id())
 ```
 
 <hr>
 
 ### Features:
+    
+- **Fast** : *The requests are very fast.*
 
-**Fast : The minimum request time is 0.07 seconds and the maximum request time is 0.3 seconds**,
-**Easy : All methods and features are designed as easy and optimal as possible**, 
-**Powerful : While the library is simple, it has high speed and features that make your work easier and faster**
+- **Easy** : *All methods and features are designed as easy and optimal as possible*
+
+- **Powerful** : *While the library is simple, it has high speed and features that make your work easier and faster*
+
 
 <hr>
 
-# Rubika : @pyrubika
+## Rubika : @pyrubika
 
 ### Install or Update:
 
 ``` bash
-python -m pip install -U pyrubi
+pip install -U pyrubi
 ```
