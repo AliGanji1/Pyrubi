@@ -1,7 +1,0 @@
-pycryptodome
-websocket-client
-requests
-urllib3
-pillow
-mutagen
-tinytag
