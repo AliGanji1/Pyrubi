@@ -2,7 +2,6 @@ class ReplyInfo:
     def __init__(self, text, author_guid) -> None:
         self.text = text
         self.author_guid = author_guid
-        pass
 
     @classmethod
     def from_json(cls, json: dict):
