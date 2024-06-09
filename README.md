@@ -1,20 +1,18 @@
-<p align='center'>
-    <img src='https://iili.io/HIjPRS9.jpg' alt='pyrubi image' width='270' height=120 class="image">
+<div align='center'>
+    <img style='border-radius: 10px' src='https://iili.io/HIjPRS9.jpg' alt='pyrubi image' width='320' height='140'>
     <br>
-    <b>Fast and powerfull Rubika API library</b>
-</p>
-
-<p align='center'>
+    <br>
+    <b>Fast & powerfull Rubika API library</b>
+    <br>
     <a href='https://github.com/AliGanji1/pyrubi'>GitHub</a>
     •
     <a href='https://rubika.ir/pyrubi_documents'>Documents</a>
-</p>
+</div>
 
 
-## Pyrubi 3.1.2
-> Fast and powerfull Rubika API library for building self bots.
-
+# Pyrubi 3.6.0
 [![Downloads](https://static.pepy.tech/badge/pyrubi)](https://pepy.tech/project/pyrubi)
+> Fast and powerfull Rubika API library for building self bots.
 
 
 <hr>
@@ -31,26 +29,32 @@ pip install -U pyrubi
 
 ``` python
 from pyrubi import Client
+from pyrubi.types import Message
 
-client = Client(session="mySelf")
+client = Client("mySelf")
 
-for message in client.on_message():
-    if message.text == "hello":
-        message.reply("**hello** __from__ ##pyrubi##")
+@client.on_message(regexp="hello")
+def send_hello(message: Message):
+    message.reply("**hello** __from__ ##pyrubi##")
+
+client.run()
 ```
 
 also you can enter your session data manually:
 ```python
 from pyrubi import Client
+from pyrubi.types import Message
 
 auth_key = "abcdefghijklnopkrstuvwxyzazxcqwe"
 private_key = "-----BEGIN RSA PRIVATE KEY-----\n..."
 
 client = Client(auth=auth_key, private=private_key)
 
-for message in client.on_message():
-    if message.text == "hello":
-        message.reply("**hello** __from__ ##pyrubi##")
+@client.on_message(regexp="hello")
+def send_hello(message: Message):
+    message.reply("**hello** __from__ ##pyrubi##")
+
+client.run()
 ```
 
 <hr>

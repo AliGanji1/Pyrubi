@@ -10,8 +10,11 @@ class Cryption:
 
     def __init__(self, auth:str, private_key:str=None):
         self.auth = auth
-        self.key = bytearray(self.secret(auth), 'UTF-8')
-        self.iv = bytearray.fromhex('0' * 32)
+        
+        if auth:
+            self.key = bytearray(self.secret(auth), 'UTF-8')
+            self.iv = bytearray.fromhex('0' * 32)
+
         if private_key:
             self.keypair = RSA.import_key(private_key.encode('UTF-8'))
 

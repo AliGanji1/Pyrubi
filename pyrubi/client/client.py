@@ -1,6 +1,4 @@
 from ..methods import Methods
-from ..utils import checkUpdate
-from threading import Thread
 
 class Client(object):
 
@@ -10,6 +8,7 @@ class Client(object):
         auth:str=None,
         private:str=None,
         platform:str="web",
+        api_version:int=6,
         proxy:str=None,
         time_out:int=10,
         show_progress_bar:bool=True
@@ -17,13 +16,12 @@ class Client(object):
         
         self.session = session
         self.platform = platform
+        self.apiVersion = api_version
         self.proxy = proxy
         self.timeOut = time_out
         
-        Thread(target=checkUpdate, daemon=True).start()
-        
         if(session):
-            from ..utils import Sessions
+            from ..sessions import Sessions
             self.sessions = Sessions(self)
 
             if(self.sessions.cheackSessionExists()):
@@ -31,17 +29,20 @@ class Client(object):
             else:
                 self.sessionData = self.sessions.createSession()
         else:
-            if(not auth):
-                print("Enter the session or auth and private!")
-                exit()
-
-            from ..utils import Tools
+            from ..utils import Utils
             self.sessionData = {
                 "auth": auth,
-                "private_key": Tools.privateParse(private=private)
+                "private_key": Utils.privateParse(private=private)
             }
 
-        self.methods = Methods(sessionData=self.sessionData, platform=platform, proxy=proxy, timeOut=time_out, showProgressBar=show_progress_bar)
+        self.methods = Methods(
+            sessionData=self.sessionData,
+            platform=platform,
+            apiVersion=api_version,
+            proxy=proxy,
+            timeOut=time_out,
+            showProgressBar=show_progress_bar
+        )
 
     # Authentication methods
     
@@ -51,8 +52,8 @@ class Client(object):
     def sign_in(self, phone_number:str, phone_code_hash:str, phone_code:str) -> dict:
         return self.methods.signIn(phoneNumber=phone_number, phoneCodeHash=phone_code_hash, phoneCode=phone_code)
     
-    def register_device(self, system_version:str, device_model:str, device_hash:str) -> dict:
-        return self.methods.registerDevice(systemVersion=system_version, deviceModel=device_model, deviceHash=device_hash)
+    def register_device(self, device_model:str) -> dict:
+        return self.methods.registerDevice(deviceModel=device_model)
     
     def logout(self) -> dict:
         return self.methods.logout()
@@ -119,7 +120,7 @@ class Client(object):
     def get_admin_members(self, object_guid:str, start_id:str=None, just_get_guids:bool=False) -> dict:
         return self.methods.getChatAdminMembers(objectGuid=object_guid, startId=start_id, justGetGuids=just_get_guids)
     
-    def get_admin_access_list(self, object_guid:str, member_guid:str=None) -> dict:
+    def get_admin_access_list(self, object_guid:str, member_guid:str) -> dict:
         return self.methods.getChatAdminAccessList(objectGuid=object_guid, memberGuid=member_guid)
     
     def get_chat_preview(self, link:str) -> dict:
@@ -269,20 +270,23 @@ class Client(object):
     def send_file(self, object_guid:str, file:str, message_id:str=None, text:str=None, file_name:str=None) -> dict:
         return self.methods.sendFile(objectGuid=object_guid, file=file, text=text, messageId=message_id, fileName=file_name)
     
-    def send_image(self, object_guid:str, file:str, message_id:str=None, text:str=None, file_name:str=None) -> dict:
-        return self.methods.sendImage(objectGuid=object_guid, file=file, text=text, messageId=message_id, fileName=file_name)
+    def send_image(self, object_guid:str, file:str, message_id:str=None, text:str=None, is_spoil:bool=False, thumbnail:str=None, file_name:str=None) -> dict:
+        return self.methods.sendImage(objectGuid=object_guid, file=file, text=text, messageId=message_id, isSpoil=is_spoil, thumbInline=thumbnail, fileName=file_name)
     
-    def send_video(self, object_guid:str, file:str, message_id:str=None, text:str=None, file_name:str=None) -> dict:
-        return self.methods.sendVideo(objectGuid=object_guid, file=file, text=text, messageId=message_id, fileName=file_name)
+    def send_video(self, object_guid:str, file:str, message_id:str=None, text:str=None, is_spoil:bool=False, thumbnail:str=None, file_name:str=None) -> dict:
+        return self.methods.sendVideo(objectGuid=object_guid, file=file, text=text, messageId=message_id, isSpoil=is_spoil, thumbInline=thumbnail, fileName=file_name)
     
-    def send_gif(self, object_guid:str, file:str, message_id:str=None, text:str=None, file_name:str=None) -> dict:
-        return self.methods.sendGif(objectGuid=object_guid, file=file, text=text, messageId=message_id, fileName=file_name)
+    def send_video_message(self, object_guid:str, file:str, message_id:str=None, text:str=None, thumbnail:str=None, file_name:str=None) -> dict:
+        return self.methods.sendVideoMessage(objectGuid=object_guid, file=file, text=text, messageId=message_id, thumbInline=thumbnail, fileName=file_name)
     
-    def send_music(self, object_guid:str, file:str, message_id:str=None, text:str=None, file_name:str=None) -> dict:
-        return self.methods.sendMusic(objectGuid=object_guid, file=file, text=text, messageId=message_id, fileName=file_name)
+    def send_gif(self, object_guid:str, file:str, message_id:str=None, text:str=None, thumbnail:str=None, file_name:str=None) -> dict:
+        return self.methods.sendGif(objectGuid=object_guid, file=file, text=text, messageId=message_id, thumbInline=thumbnail, fileName=file_name)
     
-    def send_voice(self, object_guid:str, file:str, message_id:str=None, text:str=None, file_name:str=None) -> dict:
-        return self.methods.sendVoice(objectGuid=object_guid, file=file, text=text, messageId=message_id, fileName=file_name)
+    def send_music(self, object_guid:str, file:str, message_id:str=None, text:str=None, file_name:str=None, performer:str=None) -> dict:
+        return self.methods.sendMusic(objectGuid=object_guid, file=file, text=text, messageId=message_id, fileName=file_name, performer=performer)
+    
+    def send_voice(self, object_guid:str, file:str, message_id:str=None, text:str=None, file_name:str=None, time:int=0) -> dict:
+        return self.methods.sendVoice(objectGuid=object_guid, file=file, text=text, messageId=message_id, fileName=file_name, time=time)
     
     def send_location(self, object_guid:str, latitude:int, longitude:int, message_id:str=None) -> dict:
         return self.methods.sendLocation(objectGuid=object_guid, latitude=latitude, longitude=longitude, messageId=message_id)
@@ -302,8 +306,8 @@ class Client(object):
     def unpin_message(self, object_guid:str, message_id:str) -> dict:
         return self.methods.setPinMessage(objectGuid=object_guid, messageId=message_id, action="Unpin")
     
-    def resend_message(self, object_guid:str, message_id:str, to_object_guid:str, reply_to_message_id:str=None, text:str=None) -> dict:
-        return self.methods.resendMessage(objectGuid=object_guid, messageId=message_id, toObjectGuid=to_object_guid, replyToMessageId=reply_to_message_id, text=text)
+    def resend_message(self, object_guid:str=None, message_id:str=None, to_object_guid:str=None, reply_to_message_id:str=None, text:str=None, file_inline:dict=None) -> dict:
+        return self.methods.resendMessage(objectGuid=object_guid, messageId=message_id, toObjectGuid=to_object_guid, replyToMessageId=reply_to_message_id, text=text, fileInline=file_inline)
     
     def forward_messages(self, object_guid:str, message_ids:list, to_object_guid:str) -> dict:
         return self.methods.forwardMessages(objectGuid=object_guid, messageIds=message_ids, toObjectGuid=to_object_guid)
@@ -320,11 +324,14 @@ class Client(object):
     def get_messages_interval(self, object_guid:str, middle_message_id:str) -> dict:
         return self.methods.getMessagesInterval(objectGuid=object_guid, middleMessageId=middle_message_id)
     
-    def get_messages(self, object_guid:str, max_message_id:str, filter_type:str=None, limit:int=50) -> dict:
+    def get_messages(self, object_guid:str, max_message_id:str=None, filter_type:str=None, limit:int=50) -> dict:
         return self.methods.getMessages(objectGuid=object_guid, maxId=max_message_id, filterType=filter_type, limit=limit)
     
     def get_last_message(self, object_guid:str) -> dict:
         return self.methods.getChatInfo(objectGuid=object_guid)["chat"].get("last_message")
+    
+    def get_last_message_id(self, object_guid:str) -> str:
+        return self.methods.getChatInfo(objectGuid=object_guid)["chat"].get("last_message_id")
     
     def get_messages_updates(self, object_guid:str) -> dict:
         return self.methods.getMessagesUpdates(objectGuid=object_guid)
@@ -339,7 +346,7 @@ class Client(object):
         return self.methods.clickMessageUrl(objectGuid=object_guid, messageId=message_id, linkUrl=link_url)
     
     def request_send_file(self, file_name:str, mime:str, size:str) -> dict:
-        return self.methods.requestSendFile()
+        return self.methods.requestSendFile(fileName=file_name, mime=mime, size=size)
     
     # Contact methods
 
@@ -414,8 +421,8 @@ class Client(object):
     
     # Live methods
     
-    def send_live(self, object_guid:str, thumb_inline_file:str and bytes) -> dict:
-        return self.methods.sendLive(objectGuid=object_guid, thumbInline=thumb_inline_file)
+    def send_live(self, object_guid:str, thumb_inline:str) -> dict:
+        return self.methods.sendLive(objectGuid=object_guid, thumbInline=thumb_inline)
     
     def add_live_comment(self, access_token:str, live_id:str, text:str) -> dict:
         return self.methods.addLiveComment(accessToken=access_token, liveId=live_id, text=text)
@@ -454,7 +461,7 @@ class Client(object):
     def delete_folder(self, folder_id:str) -> dict:
         return self.methods.deleteFolder(folderId=folder_id)
     
-    def update_profile(self, first_name:str, last_name:str, bio:str, username:str) -> dict:
+    def update_profile(self, first_name:str=None, last_name:str=None, bio:str=None, username:str=None) -> dict:
         return self.methods.updateProfile(firstName=first_name, lastname=last_name, bio=bio, username=username)
     
     def get_my_sessions(self) -> dict:
@@ -462,6 +469,9 @@ class Client(object):
     
     def terminate_session(self, session_key:str) -> dict:
         return self.methods.terminateSession(sessionKey=session_key)
+    
+    def terminate_other_sessions(self) -> dict:
+        return self.methods.terminateOtherSessions()
     
     def check_two_step_passcode(self, password:str) -> dict:
         return self.methods.checkTwoStepPasscode(password=password)
@@ -487,13 +497,19 @@ class Client(object):
     def get_privacy_setting(self) -> dict:
         return self.methods.getPrivacySetting()
     
-    def get_blocked_users(self) -> dict:
-        return self.methods.getBlockedUsers()
+    def get_blocked_users(self, start_id:str=None) -> dict:
+        return self.methods.getBlockedUsers(startId=start_id)
     
     # Other methods
 
     def get_me(self) -> dict:
         return self.methods.getMe()
+    
+    def transcribe_voice(self, object_guid:str, message_id:str) -> dict:
+        return self.methods.transcribeVoice(objectGuid=object_guid, messageId=message_id)
+    
+    def reset_contacts(self) -> dict:
+        return self.methods.resetContacts()
     
     def get_time(self) -> dict:
         return self.methods.getTime()
@@ -513,18 +529,32 @@ class Client(object):
     def check_join(self, object_guid:str, user_guid:str) -> bool:
         return self.methods.checkJoin(objectGuid=object_guid, userGuid=user_guid)
     
+    def get_profile_link_items(self, object_guid:str) -> dict:
+        return self.methods.getProfileLinkItems(objectGuid=object_guid)
+    
     def get_download_link(self, object_guid:str=None, message_id:str=None, file_inline:dict=None) -> dict:
         return self.methods.getDownloadLink(objectGuid=object_guid, messageId=message_id, fileInline=file_inline)
     
-    def download(self, object_guid:str=None, message_id:str=None, save:bool=False, file_inline:dict=None) -> dict:
-        return self.methods.download(objectGuid=object_guid, messageId=message_id, save=save, fileInline=file_inline)
+    def download(self, object_guid:str=None, message_id:str=None, save:bool=False, save_as:str=None, file_inline:dict=None) -> dict:
+        return self.methods.download(objectGuid=object_guid, messageId=message_id, save=save, saveAs=save_as, fileInline=file_inline)
     
-    def on_message(self, filters:list=[]):
-        from ..utils import UpdateWrapper
+    def play_voice(self, object_guid: str, file:str) -> None:
+        from asyncio import run
+        
+        async def main():
+            await self.methods.playVoice(objectGuid=object_guid, file=file)
 
-        for update in self.methods.handler():
-            filters = list(map(lambda x: x.lower(), filters))
-            message:UpdateWrapper = UpdateWrapper(update, self)
-
-            if(not(message.chat_type.lower() in filters or message.message_type.lower() in filters)):
-                yield message
+        run(main())
+    
+    def on_message(self, filters:list=[], regexp:str=None):
+        def handler(func):
+            self.methods.add_handler(
+                func=func,
+                filters=filters,
+                regexp=regexp
+            )
+        
+        return handler
+    
+    def run(self) -> None:
+        self.methods.run()

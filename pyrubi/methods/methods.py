@@ -1,35 +1,45 @@
 from random import randint
-from ..network import Network
+from ..network import Network, Socket
 from ..crypto import Cryption
-from ..utils import Tools
-from ..utils import Configs
+from ..utils import Utils
 from random import choice
+from time import sleep
+from pyrubi.exceptions import InvalidAuth, InvalidInput
+import asyncio
 
 class Methods:
 
-    def __init__(self, sessionData:dict, platform:str, proxy:str, timeOut:int, showProgressBar:bool) -> None:
+    def __init__(self, sessionData:dict, platform:str, apiVersion:int, proxy:str, timeOut:int, showProgressBar:bool) -> None:
         self.platform = platform.lower()
-        if not self.platform in Configs.clients.keys():
-            print("The \"{}\" is not a valid platform. Choose these one -> (web, android)".format(platform))
+        if not self.platform in ["android", "web", "rubx", "rubikax", "rubino"]:
+            print("The \"{}\" is not a valid platform. Choose these one -> (web, android, rubx)".format(platform))
             exit()
-
-        self.crypto = Cryption(auth=sessionData["auth"], private_key=sessionData["private_key"]) if sessionData else Cryption(auth=Tools.randomTmpSession())
-        self.sessionData = sessionData
+        self.apiVersion = apiVersion
         self.proxy = proxy
         self.timeOut = timeOut
         self.showProgressBar = showProgressBar
+        self.sessionData = sessionData
+        self.crypto = Cryption(
+            auth=sessionData["auth"],
+            private_key=sessionData["private_key"]
+        ) if sessionData else Cryption(auth=Utils.randomTmpSession())
         self.network = Network(methods=self)
+        self.socket = Socket(methods=self)
 
     # Authentication methods
 
     def sendCode(self, phoneNumber:str, passKey:str=None, sendInternal:bool=False) -> dict:
+        input:dict = {
+            "phone_number": f"98{Utils.phoneNumberParse(phoneNumber)}",
+            "send_type": "Internal" if sendInternal else "SMS",
+        }
+
+        if passKey:
+            input["pass_key"] = passKey
+
         return self.network.request(
             method="sendCode",
-            input={
-                "phone_number": f"98{Tools.phoneNumberParse(phoneNumber)}",
-                "send_type": "Internal" if sendInternal else "SMS",
-                "pass_key": passKey
-            },
+            input=input,
             tmpSession=True
         )
     
@@ -39,7 +49,7 @@ class Methods:
         data = self.network.request(
             method="signIn",
             input={
-                "phone_number": f"98{Tools.phoneNumberParse(phoneNumber)}",
+                "phone_number": f"98{Utils.phoneNumberParse(phoneNumber)}",
                 "phone_code_hash": phoneCodeHash,
                 "phone_code": phoneCode,
 			    "public_key": publicKey
@@ -56,7 +66,7 @@ class Methods:
             method="registerDevice",
             input={
                 "app_version": "WB_4.3.3" if self.platform == "web" else "MA_3.4.3",
-                "device_hash": Tools.randomDeviceHash(),
+                "device_hash": Utils.randomDeviceHash(),
                 "device_model": deviceModel,
                 "is_multi_account": False,
                 "lang_code": "fa",
@@ -81,32 +91,32 @@ class Methods:
         return self.network.request(method="removeFromTopChatUsers", input={"user_guid": objectGuid})
     
     def getChatAds(self) -> dict:
-        return self.network.request(method="getChatAds", input={"state": Tools.getState()})
+        return self.network.request(method="getChatAds", input={"state": Utils.getState()})
 
     def getChatsUpdates(self) -> dict:
-        return self.network.request(method="getChatsUpdates", input={"state": Tools.getState()})
+        return self.network.request(method="getChatsUpdates", input={"state": Utils.getState()})
     
     def joinChat(self, guidOrLink:str) -> dict:
-        if Tools.checkLink(guidOrLink):
-            method:str = "joinGroup" if Tools.getChatTypeByLink(link=guidOrLink) == "Group" else "joinChannelByLink"
+        if Utils.checkLink(guidOrLink):
+            method:str = "joinGroup" if Utils.getChatTypeByLink(link=guidOrLink) == "Group" else "joinChannelByLink"
         else:
             method:str = "joinChannelAction"
 
         return self.network.request(
             method=method,
-            input={"hash_link": guidOrLink.split("/")[-1]} if Tools.checkLink(guidOrLink) else {
+            input={"hash_link": guidOrLink.split("/")[-1]} if Utils.checkLink(guidOrLink) else {
                 "channel_guid": guidOrLink,
                 "action": "Join"
             }
         )
     
     def leaveChat(self, objectGuid:str) -> dict:
-        input:dict = {f"{Tools.getChatTypeByGuid(objectGuid=objectGuid).lower()}_guid": objectGuid}
+        input:dict = {f"{Utils.getChatTypeByGuid(objectGuid=objectGuid).lower()}_guid": objectGuid}
 
-        if Tools.getChatTypeByGuid(objectGuid=objectGuid) == "Group": method:str = "leaveGroup"
+        if Utils.getChatTypeByGuid(objectGuid=objectGuid) == "Group": method:str = "leaveGroup"
         else:
             method:str = "joinChannelAction"
-            input["action"] = "Remove"
+            input["action"] = "Leave"
 
         return self.network.request(
             method=method,
@@ -114,7 +124,7 @@ class Methods:
         )
     
     def removeChat(self, objectGuid:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"remove{chatType}",
@@ -122,7 +132,7 @@ class Methods:
         )
     
     def getChatInfo(self, objectGuid:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"get{chatType}Info",
@@ -133,7 +143,7 @@ class Methods:
         return self.network.request(method="getObjectInfoByUsername", input={"username": username.replace("@", "")})
     
     def getChatLink(self, objectGuid:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"get{chatType}Link",
@@ -141,7 +151,7 @@ class Methods:
         )
     
     def setChatLink(self, objectGuid:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"set{chatType}Link",
@@ -149,15 +159,15 @@ class Methods:
         )
     
     def setChatAdmin(self, objectGuid:str, memberGuid:str, accessList:list, customTitle:str, action:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         input:dict = {
             f"{chatType.lower()}_guid": objectGuid,
             "member_guid": memberGuid,
-            "action": action
+            "action": action,
+            "access_list": accessList or []
         }
 
-        if accessList: input["access_list"] = accessList
         if customTitle: input["custom_title"] = customTitle
 
         return self.network.request(
@@ -166,7 +176,7 @@ class Methods:
         )
     
     def addChatMember(self, objectGuid:str, memberGuids:list) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"add{chatType}Members",
@@ -177,7 +187,7 @@ class Methods:
         )
     
     def banChatMember(self, objectGuid:str, memberGuid:str, action:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"ban{chatType}Member",
@@ -189,7 +199,7 @@ class Methods:
         )
     
     def getBannedChatMembers(self, objectGuid:str, startId:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"getBanned{chatType}Members",
@@ -200,7 +210,7 @@ class Methods:
         )
     
     def getChatAllMembers(self, objectGuid:str, searchText:str, startId:str, justGetGuids:bool=False) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         data = self.network.request(
             method=f"get{chatType}AllMembers",
@@ -216,7 +226,7 @@ class Methods:
         return data
     
     def getChatAdminMembers(self, objectGuid:str, startId:str, justGetGuids:bool) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         data = self.network.request(
             method=f"get{chatType}AdminMembers",
@@ -232,7 +242,7 @@ class Methods:
 
     
     def getChatAdminAccessList(self, objectGuid:str, memberGuid:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"get{chatType}AdminAccessList",
@@ -249,26 +259,26 @@ class Methods:
         )
     
     def createChatVoiceChat(self, objectGuid:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"create{chatType}VoiceChat",
             input={f"{chatType.lower()}_guid": objectGuid}
         )
     
-    def joinVoiceChat(self, objectGuid:str, myGuid:str, voiceChatId:str) -> dict:
+    def joinVoiceChat(self, objectGuid:str, myGuid:str, voiceChatId:str, sdp_offer_data:str) -> dict:
         return self.network.request(
-            method=f"join{Tools.getChatTypeByGuid(objectGuid=objectGuid)}VoiceChat",
+            method=f"join{Utils.getChatTypeByGuid(objectGuid=objectGuid)}VoiceChat",
             input={
                 "chat_guid": objectGuid,
-                "sdp_offer_data": "v=0\no=- -6112403547879777339 2 IN IP4 127.0.0.1\ns=-\nt=0 0\na=group:BUNDLE 0\na=msid-semantic: WMS audio0\nm=audio 9 UDP\/TLS\/RTP\/SAVPF 111\nc=IN IP4 0.0.0.0\na=rtcp:9 IN IP4 0.0.0.0\na=ice-ufrag:IqUf\na=ice-pwd:mwo47t9uImp1xuV9T1HBKcPD\na=ice-options:trickle\na=fingerprint:sha-256 44:84:68:B4:AE:68:1A:2A:D6:35:CB:CF:3F:EA:F6:59:BD:25:1F:E0:B2:35:49:FF:7A:72:80:6F:F4:4D:FC:0D\na=setup:passive\na=mid:0\na=sendrecv\na=msid:audio0 audio0\na=rtcp-mux\na=rtpmap:111 opus\/48000\/2\na=rtcp-fb:111 transport-cc\na=fmtp:111 minptime=10;useinbandfec=1\na=rtpmap:110 telephone-event\/48000\na=ssrc:1343160491\na=ssrc:1343160491 msid:audio0 audio0\na=ssrc:1343160491 mslabel:audio0\na=ssrc:1343160491 label:audio0",
-                "self_object_guid": myGuid,
-                "voice_chat_id": voiceChatId
+                "voice_chat_id": voiceChatId,
+                "sdp_offer_data": sdp_offer_data,
+                "self_object_guid": myGuid
             }
         )
 
     def setChatVoiceChatSetting(self, objectGuid:str, voideChatId:str, title:str, joinMuted:bool) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         input:dict = {
             f"{chatType.lower()}_guid": objectGuid,
@@ -290,19 +300,19 @@ class Methods:
         )
     
     def getChatVoiceChatUpdates(self, objectGuid:str, voideChatId:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"get{chatType}VoiceChatUpdates",
             input={
                 f"{chatType.lower()}_guid": objectGuid,
                 "voice_chat_id": voideChatId,
-                "state": Tools.getState()
+                "state": Utils.getState()
             }
         )
     
     def getChatVoiceChatParticipants(self, objectGuid:str, voideChatId:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"get{chatType}VoiceChatParticipants",
@@ -312,33 +322,34 @@ class Methods:
             }
         )
     
-    def setChatVoiceChatState(self, objectGuid:str, voideChatId:str, activity:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+    def setChatVoiceChatState(self, objectGuid:str, voideChatId:str, activity:str, participantObjectGuid:str) -> dict:
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
-            method=f"get{chatType}VoiceChatState",
+            method=f"set{chatType}VoiceChatState",
             input={
-                f"{chatType.lower()}_guid": objectGuid,
-                "voice_chat_id": voideChatId,
-                "activity": activity
-            }
-        )
-    
-    def sendChatVoiceChatActivity(self, objectGuid:str, voideChatId:str, activity:str, participantObjectGuid:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
-
-        return self.network.request(
-            method=f"get{chatType}VoiceChatActivity",
-            input={
-                f"{chatType.lower()}_guid": objectGuid,
+                "chat_guid": objectGuid,
                 "voice_chat_id": voideChatId,
                 "action": activity,
                 "participant_object_guid": participantObjectGuid
             }
         )
     
+    def sendChatVoiceChatActivity(self, objectGuid:str, voideChatId:str, activity:str, participantObjectGuid:str) -> dict:
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
+
+        return self.network.request(
+            method=f"send{chatType}VoiceChatActivity",
+            input={
+                "chat_guid": objectGuid,
+                "voice_chat_id": voideChatId,
+                "activity": activity,
+                "participant_object_guid": participantObjectGuid
+            }
+        )
+    
     def leaveChatVoiceChat(self, objectGuid:str, voideChatId:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"leave{chatType}VoiceChat",
@@ -349,7 +360,7 @@ class Methods:
         )
     
     def discardChatVoiceChat(self, objectGuid:str, voideChatId:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"discard{chatType}VoiceChat",
@@ -372,7 +383,7 @@ class Methods:
         return self.network.request(method="seenChats", input={"seen_list": seenList})
     
     def seenChatMessages(self, objectGuid:str, minId:str, maxId:str) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"seen{chatType}Messages",
@@ -535,7 +546,7 @@ class Methods:
         )
     
     def setChatDefaultAccess(self, objectGuid:str, accessList:list) -> dict:
-        chatType:str = Tools.getChatTypeByGuid(objectGuid=objectGuid)
+        chatType:str = Utils.getChatTypeByGuid(objectGuid=objectGuid)
 
         return self.network.request(
             method=f"setGroupDefaultAccess",
@@ -700,7 +711,7 @@ class Methods:
     # Message methods
     
     def sendText(self, objectGuid:str, text:str, messageId:str) -> dict:
-        metadata = Tools.checkMetadata(text)
+        metadata = Utils.checkMetadata(text)
 
         input = {
             "object_guid": objectGuid,
@@ -713,7 +724,19 @@ class Methods:
 
         return self.network.request(method="sendMessage", input=input)
     
-    def baseSendFileInline(self, objectGuid:str, file:str, text:str, messageId:str, fileName:str, type:dict) -> dict:
+    def baseSendFileInline(
+            self,
+            objectGuid:str,
+            file:str,
+            text:str,
+            messageId:str,
+            fileName:str,
+            type:dict,
+            isSpoil:bool=False,
+            customThumbInline:str=None,
+            time:int=None,
+            performer:str=None
+    ) -> dict:
         uploadData:dict = self.network.upload(file=file, fileName=fileName)
         if not uploadData: return
         
@@ -726,30 +749,43 @@ class Methods:
                 "mime": uploadData["mime"],
                 "access_hash_rec": uploadData["access_hash_rec"],
                 "type": type,
+                "is_spoil": isSpoil
             },
             "object_guid": objectGuid,
-            "rnd": Tools.randomRnd(),
+            "rnd": Utils.randomRnd(),
             "reply_to_message_id": messageId
         }
 
-        if type in ["Image", "Video", "Gif"]:
-            if not type == "Image":
-                videoData:list = Tools.getVideoData(uploadData["file"])
-                print(videoData)
-                input["file_inline"]["time"] = videoData[2]
+        if type in ["Image", "Video", "Gif", "VideoMessage"]:
+            customThumbInline = Utils.getImageThumbnail(
+                customThumbInline
+                if isinstance(customThumbInline, bytes)
+                else self.network.http.request("GET", customThumbInline).data
+                if Utils.checkLink(customThumbInline)
+                else open(customThumbInline, "rb").read()
+            ) if customThumbInline else None
 
-            fileSize:list = Tools.getImageSize(uploadData["file"]) if type == "Image" else videoData[1]
+            if not type == "Image":
+                videoData:list = Utils.getVideoData(uploadData["file"])
+                input["file_inline"]["time"] = videoData[2] * 1000
+
+            fileSize:list = Utils.getImageSize(uploadData["file"]) if type == "Image" else videoData[1]
             input["file_inline"]["width"] = fileSize[0]
             input["file_inline"]["height"] = fileSize[1]
 
-            thumbInline = Tools.getImageThumbnail(uploadData["file"]) if type == "Image" else videoData[0]
-            input["file_inline"]["thumb_inline"] = thumbInline
+            if type == "VideoMessage":
+                input["file_inline"]["type"] = "Video"
+                input["file_inline"]["is_round"] = True
+
+            input["file_inline"]["thumb_inline"] = customThumbInline or (Utils.getImageThumbnail(uploadData["file"]) if type == "Image" else videoData[0])
 
         if type in ["Music", "Voice"]:
-            input["file_inline"]["time"] = Tools.getVoiceDuration(uploadData["file"]) * (1000 if type == "Voice" else 1)
-            input["file_inline"]["music_performer"] = Tools.getMusicArtist(uploadData["file"])
+            input["file_inline"]["time"] = (time or Utils.getVoiceDuration(uploadData["file"])) * (1000 if type == "Voice" else 1)
 
-        metadata:list = Tools.checkMetadata(text)
+            if type == "Music":
+                input["file_inline"]["music_performer"] = performer or Utils.getMusicArtist(uploadData["file"])
+
+        metadata:list = Utils.checkMetadata(text)
         if metadata[1]: input["text"] = metadata[1]
         if metadata[0]: input["metadata"] = {"meta_data_parts": metadata[0]}
 
@@ -769,54 +805,72 @@ class Methods:
             type="File"
         )
     
-    def sendImage(self, objectGuid:str, file:str, messageId:str, text:str, fileName:str) -> dict:
+    def sendImage(self, objectGuid:str, file:str, messageId:str, text:str, isSpoil:bool, thumbInline:str, fileName:str) -> dict:
         return self.baseSendFileInline(
             objectGuid=objectGuid,
             file=file,
             text=text,
             messageId=messageId,
             fileName=fileName,
-            type="Image"
+            type="Image",
+            isSpoil=isSpoil,
+            customThumbInline=thumbInline
         )
     
-    def sendVideo(self, objectGuid:str, file:str, messageId:str, text:str, fileName:str) -> dict:
+    def sendVideo(self, objectGuid:str, file:str, messageId:str, text:str, isSpoil:bool, thumbInline:str, fileName:str) -> dict:
         return self.baseSendFileInline(
             objectGuid=objectGuid,
             file=file,
             text=text,
             messageId=messageId,
             fileName=fileName,
-            type="Video"
+            type="Video",
+            isSpoil=isSpoil,
+            customThumbInline=thumbInline
         )
     
-    def sendGif(self, objectGuid:str, file:str, messageId:str, text:str, fileName:str) -> dict:
+    def sendVideoMessage(self, objectGuid:str, file:str, messageId:str, text:str, thumbInline:str, fileName:str) -> dict:
         return self.baseSendFileInline(
             objectGuid=objectGuid,
             file=file,
             text=text,
             messageId=messageId,
             fileName=fileName,
-            type="Gif"
+            type="VideoMessage",
+            customThumbInline=thumbInline
         )
     
-    def sendMusic(self, objectGuid:str, file:str, messageId:str, text:str, fileName:str) -> dict:
+    def sendGif(self, objectGuid:str, file:str, messageId:str, text:str, thumbInline:str, fileName:str) -> dict:
         return self.baseSendFileInline(
             objectGuid=objectGuid,
             file=file,
             text=text,
             messageId=messageId,
             fileName=fileName,
-            type="Music"
+            type="Gif",
+            customThumbInline=thumbInline
         )
     
-    def sendVoice(self, objectGuid:str, file:str, messageId:str, text:str, fileName:str) -> dict:
+    def sendMusic(self, objectGuid:str, file:str, messageId:str, text:str, fileName:str, performer:str) -> dict:
         return self.baseSendFileInline(
             objectGuid=objectGuid,
             file=file,
             text=text,
             messageId=messageId,
             fileName=fileName,
-            type="Voice"
+            type="Music",
+            performer=performer
+        )
+    
+    def sendVoice(self, objectGuid:str, file:str, messageId:str, text:str, fileName:str, time:int) -> dict:
+        return self.baseSendFileInline(
+            objectGuid=objectGuid,
+            file=file,
+            text=text,
+            messageId=messageId,
+            fileName=fileName,
+            type="Voice",
+            time=time
         )
     
     def sendLocation(self, objectGuid:str, latitude:int, longitude:int, messageId:str) -> dict:
@@ -828,7 +882,7 @@ class Methods:
                     "longitude": longitude
                 },
                 "object_guid":objectGuid,
-                "rnd": Tools.randomRnd(),
+                "rnd": Utils.randomRnd(),
                 "reply_to_message_id": messageId
             }
         )
@@ -845,7 +899,7 @@ class Methods:
         )
     
     def editMessage(self, objectGuid, text, messageId) -> dict:
-        metadata = Tools.checkMetadata(text)
+        metadata = Utils.checkMetadata(text)
         data = {
             "object_guid": objectGuid,
             "text": metadata[1],
@@ -859,7 +913,7 @@ class Methods:
         return self.network.request(
             method="actionOnMessageReaction",
             input={
-                "action": action, #Add #Remove
+                "action": action, #Add OR Remove
                 "object_guid": objectGuid,
                 "message_id": messageId,
                 "reaction_id": reactionId
@@ -876,42 +930,44 @@ class Methods:
             }
         )
     
-    def resendMessage(self, objectGuid:str, messageId:str, toObjectGuid:str, replyToMessageId:str, text:str) -> dict:
-        messageData:dict = self.getMessagesById(objectGuid=objectGuid, messageIds=[messageId])
+    def resendMessage(self, objectGuid:str, messageId:str, toObjectGuid:str, replyToMessageId:str, text:str, fileInline:None) -> dict:
+        if not fileInline:
+            messageData:dict = self.getMessagesById(objectGuid=objectGuid, messageIds=[messageId])
+
         text:str = text or messageData["messages"][0].get("text")
-
-        metadata = Tools.checkMetadata(text)
-
+        metadata = Utils.checkMetadata(text)
         input = {
             "is_mute": False,
             "object_guid": toObjectGuid,
-            "rnd": Tools.randomRnd(),
+            "rnd": Utils.randomRnd(),
             "reply_to_message_id": replyToMessageId,
             "text": metadata[1]
         }
-        
-        fileInline:dict = messageData["messages"][0].get("file_inline")
-        if fileInline: input["file_inline"] = fileInline
 
-        location:dict = messageData["messages"][0].get("location")
-        if location:
-            input["location"] = location
-            del input["location"]["map_view"]
-            del input["text"]
+        fileInline:dict = fileInline or messageData["messages"][0].get("file_inline")
+        if fileInline:
+            input["file_inline"] = fileInline
 
-        contact:dict = messageData["messages"][0].get("message_contact")
-        if contact:
-            input["message_contact"] = contact
-            del input["text"]
+        if not fileInline:
+            location:dict = messageData["messages"][0].get("location")
+            if location:
+                input["location"] = location
+                del input["location"]["map_view"]
+                del input["text"]
 
-        sticker:dict = messageData["messages"][0].get("sticker")
-        if sticker:
-            input["sticker"] = sticker
-            del input["text"]
+            contact:dict = messageData["messages"][0].get("message_contact")
+            if contact:
+                input["message_contact"] = contact
+                del input["text"]
 
-        if messageData and messageData["messages"][0].get("metadata"):
-            input["metadata"] = {"meta_data_parts": messageData["messages"][0]["metadata"]}
+            sticker:dict = messageData["messages"][0].get("sticker")
+            if sticker:
+                input["sticker"] = sticker
+                del input["text"]
 
+            if messageData["messages"][0].get("metadata"):
+                input["metadata"] = {"meta_data_parts": messageData["messages"][0]["metadata"]}
+                
         elif metadata[0] != []:
             input["metadata"] = {"meta_data_parts": metadata[0]}
 
@@ -924,7 +980,7 @@ class Methods:
                 "from_object_guid": objectGuid,
                 "message_ids": messageIds,
                 "to_object_guid": toObjectGuid,
-                "rnd": Tools.randomRnd(),
+                "rnd": Utils.randomRnd(),
             }
         )
     
@@ -967,7 +1023,7 @@ class Methods:
             method="getMessagesUpdates",
             input={
                 "object_guid": objectGuid,
-                "state": Tools.getState(),
+                "state": Utils.getState(),
             }
         )
     
@@ -1031,7 +1087,7 @@ class Methods:
                     "user_guid": userGuid
                 },
                 "object_guid":objectGuid,
-                "rnd": Tools.randomRnd(),
+                "rnd": Utils.randomRnd(),
                 "reply_to_message_id": messageId
             }
         )
@@ -1046,7 +1102,7 @@ class Methods:
         return self.network.request(
             method="addAddressBook",
             input={
-                "phone": phone,
+                "phone": f"98{Utils.phoneNumberParse(phone)}",
                 "first_name": firstName,
                 "last_name": lastName
             }
@@ -1056,7 +1112,7 @@ class Methods:
         return self.network.request(method="deleteContact", input={"user_guid": objectGuid})
     
     def getContactsUpdates(self) -> dict:
-        return self.network.request(method="getContactsUpdates", input={"state": Tools.getState()})
+        return self.network.request(method="getContactsUpdates", input={"state": Utils.getState()})
     
     # Sticker methods
 
@@ -1064,7 +1120,7 @@ class Methods:
         data = {
             "sticker": stickerData or choice(self.getStickersByEmoji(emoji)["stickers"]),
             "object_guid": objectGuid,
-            "rnd": Tools.randomRnd(),
+            "rnd": Utils.randomRnd(),
             "reply_to_message_id": messageId,
         }
         
@@ -1135,7 +1191,7 @@ class Methods:
                 "object_guid": objectGuid,
                 "options": options if len(options) >= 2 else ["This poll was created with Pyrubi Library", "حداقل باید دو گزینه برای نظر سنجی گزاشته شود!"],
                 "question": question,
-                "rnd": Tools.randomRnd(),
+                "rnd": Utils.randomRnd(),
                 "type": "Quiz" if quiz else "Regular",
                 "reply_to_message_id": messageId
             }
@@ -1165,20 +1221,20 @@ class Methods:
     
     # Live methods
 
-    def sendLive(self, objectGuid:str, thumbInline:str and bytes) -> dict:
+    def sendLive(self, objectGuid:str, thumbInline:str) -> dict:
         return self.network.request(
             method="sendLive",
             input={
-                "thumb_inline": Tools.getImageThumbnail(
+                "thumb_inline": Utils.getImageThumbnail(
                     thumbInline
                     if isinstance(thumbInline, bytes)
                     else self.network.http.request("GET", thumbInline)
-                    if Tools.checkLink(thumbInline)
+                    if Utils.checkLink(thumbInline)
                     else open(thumbInline, "rb").read()
                 ),
                 "device_type": "Software",
                 "object_guid": objectGuid,
-                "rnd": Tools.randomRnd()
+                "rnd": Utils.randomRnd()
             }
         )
     
@@ -1242,7 +1298,7 @@ class Methods:
             input={
                 "call_id": callId,
                 "duration": duration,
-                "reason": reason #Missed #Disconnect
+                "reason": reason #Missed OR Disconnect
             }
         )
     
@@ -1327,11 +1383,14 @@ class Methods:
             "updated_parameters": []
         }
 
-        if firstName: input["updated_parameters"].append("first_name")
+        if firstName:input["updated_parameters"].append("first_name")
         if lastname: input["updated_parameters"].append("last_name")
         if bio: input["updated_parameters"].append("bio")
 
-        if username: self.network.request(method="updateUsername", input={"username": username})
+        if username:
+            response:dict = self.network.request(method="updateUsername", input={"username": username})
+            if not input["updated_parameters"]:
+                return response
 
         return self.network.request(
             method="updateProfile",
@@ -1343,6 +1402,9 @@ class Methods:
     
     def terminateSession(self, sessionKey:str) -> dict:
         return self.network.request(method="terminateSession", input={"session_key": sessionKey})
+    
+    def terminateOtherSessions(self):
+            return self.network.request("terminateOtherSessions")
     
     def checkTwoStepPasscode(self, password:str) -> dict:
         return self.network.request(method="checkTwoStepPasscode", input={"password": password})
@@ -1394,8 +1456,8 @@ class Methods:
     def getPrivacySetting(self) -> dict:
         return self.network.request(method="getPrivacySetting")
     
-    def getBlockedUsers(self) -> dict:
-        return self.network.request(method="getBlockedUsers")
+    def getBlockedUsers(self, startId:str) -> dict:
+        return self.network.request(method="getBlockedUsers", input={"start_id": startId})
     
     # Other methods
 
@@ -1403,6 +1465,36 @@ class Methods:
         data:dict = self.network.request(method="getUserInfo")
         data.update(self.sessionData)
         return data
+    
+    def transcribeVoice(self, objectGuid:str, messageId:str) -> dict:
+        response = self.network.request(
+            method="transcribeVoice",
+            input={
+                "object_guid": objectGuid,
+                "message_id": messageId
+            }
+        )
+        
+        if response["status"] != "OK":
+            return response
+        
+        while True:
+            sleep(0.5)
+            result = self.network.request(
+                method="getTranscription",
+                input={
+                    "message_id": messageId,
+                    "transcription_id": response["transcription_id"]
+                }
+            )
+            
+            if result["status"] != "OK":
+                continue
+
+            return result
+    
+    def resetContacts(self) -> dict:
+        return self.network.request("resetContacts")
     
     def getTime(self) -> dict:
         return self.network.request("getTime")
@@ -1430,27 +1522,114 @@ class Methods:
         
         return None
     
+    def getProfileLinkItems(self, objectGuid:str) -> dict:
+        return self.network.request(method="getProfileLinkItems", input={"object_guid": objectGuid})
+    
     def getDownloadLink(self, objectGuid:str, messageId:str, fileInline:dict) -> str:
         if not fileInline:
             fileInline = self.getMessagesById(objectGuid=objectGuid, messageIds=[messageId])["messages"][0]["file_inline"]
         
         return f'https://messenger{fileInline["dc_id"]}.iranlms.ir/InternFile.ashx?id={fileInline["file_id"]}&ach={fileInline["access_hash_rec"]}'
     
-    def download(self, objectGuid:str, messageId:str, save:bool, fileInline:dict) -> dict:
+    def download(self, objectGuid:str, messageId:str, save:bool, saveAs:str, fileInline:dict) -> dict:
         if not fileInline:
             fileInline = self.getMessagesById(objectGuid=objectGuid, messageIds=[messageId])["messages"][0]["file_inline"]
 
-        downloadedData:bytes = self.network.download(accessHashRec=fileInline["access_hash_rec"], fileId=fileInline["file_id"], dcId=fileInline["dc_id"], size=fileInline["size"], fileName=fileInline["file_name"])
-        if save:
-            with open(fileInline["file_name"], "wb") as file:
+        downloadedData:bytes = self.network.download(
+            accessHashRec=fileInline["access_hash_rec"],
+            fileId=fileInline["file_id"],
+            dcId=fileInline["dc_id"],
+            size=fileInline["size"], 
+            fileName=fileInline["file_name"]
+        )
+
+        if save or saveAs:
+            with open(saveAs or fileInline["file_name"], "wb") as file:
                 file.write(downloadedData)
 
         fileInline["file"] = downloadedData
 
         return fileInline
     
-    def handler(self) -> dict:
-        for update in self.network.handShake():
-            if "chat_updates" in update:
-                if update.get("message_updates") and update["message_updates"][0]["action"] == "New":
-                    yield update
+    async def playVoice(self, objectGuid:str, file: str) -> None:
+        try:
+            from aiortc import RTCPeerConnection, RTCSessionDescription
+            from aiortc.contrib.media import MediaPlayer
+                
+            voiceChatId: str = self.getChatInfo(objectGuid)["chat"].get("group_voice_chat_id")
+
+            if not voiceChatId:
+                voiceChatId:str = self.createChatVoiceChat(objectGuid=objectGuid)["group_voice_chat_update"]["voice_chat_id"]
+
+            rtcConnection = RTCPeerConnection()
+            player: MediaPlayer = MediaPlayer(file)
+            rtcConnection.addTrack(player.audio)
+            spdOffer = await rtcConnection.createOffer()
+            await rtcConnection.setLocalDescription(spdOffer)
+
+            answerSdp = self.joinVoiceChat(
+                objectGuid=objectGuid,
+                myGuid=self.sessionData["user"]["user_guid"],
+                voiceChatId=voiceChatId,
+                sdp_offer_data=spdOffer.sdp
+            )["sdp_answer_data"]
+            
+            self.setChatVoiceChatState(
+                objectGuid=objectGuid,
+                voideChatId=voiceChatId,
+                activity="Unmute",
+                participantObjectGuid=self.sessionData["user"]["user_guid"]
+            )
+
+            remoteDescription = RTCSessionDescription(answerSdp, "answer")
+            await rtcConnection.setRemoteDescription(remoteDescription)
+
+            def onEnded():
+                asyncio.ensure_future(rtcConnection.close())
+
+            player.audio.on("ended", onEnded)
+
+            def keepAlive():
+                while rtcConnection.connectionState != "closed":
+                    try:
+                        if self.sendChatVoiceChatActivity(
+                            objectGuid=objectGuid,
+                            voideChatId=voiceChatId,
+                            activity="Speaking",
+                            participantObjectGuid=self.sessionData["user"]["user_guid"]
+                        )["status"] != "OK":
+                            break
+                        
+                        if self.getChatVoiceChatUpdates(
+                            objectGuid=objectGuid,
+                            voideChatId=voiceChatId
+                        )["status"] != "OK":
+                            break
+
+                        sleep(8)
+                    except (InvalidInput, InvalidAuth):
+                        break
+                    except:
+                        continue
+                
+            from threading import Thread
+            Thread(target=keepAlive, daemon=False).start()
+
+            while rtcConnection.connectionState != "closed":
+                await asyncio.sleep(1)
+
+            asyncio.ensure_future(rtcConnection.close())
+
+        except ImportError:
+            print("The aiortc library is not installed!")
+
+    def add_handler(self, func, filters:list, regexp:str) -> None:
+        self.socket.addHandler(
+            func=func,
+            filters=filters,
+            regexp=regexp
+        )
+        return func
+    
+    def run(self) -> None:
+        self.socket.connect()
